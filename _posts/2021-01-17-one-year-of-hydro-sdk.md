@@ -55,6 +55,9 @@ The project of the day ever since has been on what has come to be named Structur
 ### Ambient Computing, Ambient Packages
 Looking to the future, SWID will be the cornerstone in bridging the gap between `pub.dev`, Hydro-SDK and `npm`. Hopefully bringing the power of each together into one repository of packages. `pub.dev` package authors will get an automated Typescript mirror of their work, app developers will get to pick and choose from the best of `pub.dev`, and `npm`.
 
+### Ambient Computing, Ambient Languages
+In addition to enabling a wider package ecosystem, SWID will provide the foundation for wider language support. SWID is structured in a classic frontend-backend compiler design. Typescript and Dart both just happen to be backends. Adding support for additional languages, like [the Haxe programming language](https://haxe.org/), C# via [CSharp.lua](https://github.com/yanghuan/CSharp.lua) or Java or Kotlin via [JTransc](https://github.com/jtransc/jtransc) will be as easy as adding a new backend to SWID.
+
 ### In Band, Out of Band
 At the time of writing, the developer experience for deploying an app making use of Hydro-SDK's over the air code loading is shakey at best. Planning is beginning on what a first-class hosting, deployment, flagging and analytics service might look like and how to best integrate it with Hydro-SDK.
 
