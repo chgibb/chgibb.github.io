@@ -3,7 +3,7 @@ layout: post
 title: One Year of Hydro-SDK
 ---
 
-[Hydro-SDK](https://github.com/hydro-sdk/hydro-sdk) has been my passion project for the last (roughly) year. While still very pre-alpha in quality, I thought it was about time to collect my thoughts on it's past and future in one place and reflect on the journey.
+[Hydro-SDK](https://github.com/hydro-sdk/hydro-sdk) has been my passion project for the last (roughly) year. While still very pre-alpha in quality, I thought it was about time to collect my thoughts on its past and future in one place and reflect on the journey.
 
 [Hydro-SDK](https://github.com/hydro-sdk/hydro-sdk) is a project with one large, ambitious goal. "Become React Native for Flutter".  
 It aims to do that by:
