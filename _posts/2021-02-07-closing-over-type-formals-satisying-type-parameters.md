@@ -77,6 +77,6 @@ With consumers able to use it like the following:
 
  The end result for consumers is having to shift where they ordinarily write their generics when calling `factory` constructors.
 
- The type propogation pass itself can be found [here](https://github.com/hydro-sdk/hydro-sdk/blob/0.0.1-nightly.99/lib/swid/ir/frontend/dart/util/propagateUnsatisfiedTypeParameters.dart). Tests for satisfying type parameters and propagating formals can be found [here](https://github.com/hydro-sdk/hydro-sdk/blob/0.0.1-nightly.99/test/swid/typeFormals/unsatisfiedTypeFormals_test.dart).
+ The type propagation pass itself can be found [here](https://github.com/hydro-sdk/hydro-sdk/blob/0.0.1-nightly.99/lib/swid/ir/frontend/dart/util/propagateUnsatisfiedTypeParameters.dart). Tests for satisfying type parameters and propagating formals can be found [here](https://github.com/hydro-sdk/hydro-sdk/blob/0.0.1-nightly.99/test/swid/typeFormals/unsatisfiedTypeFormals_test.dart). The extent of type formal closures can be controlled by the `SwidClassTypeFormalClosureKind` `enum`. SWID's Typescript backend uses `SwidClassTypeFormalClosureKind.kNoCloseOverTypeFormalsInStaticMembers` for propagation. Other options exist to preserve Dart's semantics should a future SWID backend need to.
 
  Hopefully this problem and its solution was as fun to read about as it was to discover and solve. Hydro-SDK is an endless fractal of problems like this. Hopefully I'll be able to make "Adventures in automatically binding Dart to Typescript" a series of posts.
