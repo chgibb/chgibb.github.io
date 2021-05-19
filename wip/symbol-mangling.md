@@ -12,8 +12,8 @@ In this article I want to delve into some of the gritty details of how Hydro-SDK
 
 `ts2hc` is a command line program distributed as part of each Hydro-SDK release. `ts2hc`'s job is to turn Typescript code into bytecode and debug symbols. Users generally don't interact with it directly but rather indirectly through commands like `hydroc build` and `hydroc run`.
 
-## Compile Time
-On its way to bytecode, Typescript is first lowered into Lua by leveraging the excellent [Typescript to Lua (TSTL) library](https://github.com/TypeScriptToLua/TypeScriptToLua). Consider the following excerpt from the [Counter-App showcase](https://github.com/hydro-sdk/counter-app):
+## Build Time
+Typescript is lowered into Lua by leveraging the excellent [Typescript to Lua (TSTL) library](https://github.com/TypeScriptToLua/TypeScriptToLua). Consider the following excerpt from the [Counter-App showcase](https://github.com/hydro-sdk/counter-app):
 ```typescript
 //counter-app/ota/lib/counterApp.ts
 import {
@@ -41,7 +41,7 @@ export class CounterApp extends StatelessWidget {
 }
 ```
 
-`ts2hc` will lower `counter-app/ota/lib/counterApp.ts`, all of its dependencies, and then bundle the result into something like the following:
+`ts2hc` will lower `counter-app/ota/lib/counterApp.ts`, and all of its dependencies into individual Lua modules. These Lua modules are then bundled with the result looking something like the following:
 
 ```lua
 local package = {preload={}, loaded={}}
@@ -95,10 +95,23 @@ package.preload["ota.lib.counterApp"] = (function (...)
 end)
 ```
 
-The lowered Lua still somewhat resembles the input Typescript. Typescript ES6 modules are wrapped into Lua immediately invoked function expressions (IIFE), assigned string keys in the `package.preload` map and their `exports` made available by `require`ing them. This pattern should be familiar to anyone who's hacked on Javascript bundlers/module resolvers like Browserify or Rollup.
+The lowered and bundled Lua still somewhat resembles the input Typescript. Typescript ES6 modules are wrapped into Lua immediately invoked function expressions (IIFE), assigned string keys in the `package.preload` map and their `exports` made available by `require`ing them. This pattern should be familiar to anyone who's hacked on Javascript bundlers/module resolvers like Browserify or Rollup.
 
 Lua lacks builtin object-oriented programming (OOP) facilities (wether prototypal or otherwise). Typescript language features which don't quite map one-to-one with Lua are shimmed using `__TS_*` functions made available through the `lualib_bundle` module (which `ts2hc` injects during bundling). Above, the `CounterApp` class is lowered into a series of calls to `__TS__Class` and `__TS__ClassExtends`, followed by placing its declared methods on its `prototype`.
 
+The Lua bundle output by `ts2hc` will eventually be turned into bytecode by the PUC-RIO Lua 5.2 compiler, distributed under the name `luac52` by Hydro-SDK. The `build` method on the `CounterApp` class above would compile into something like the following:
+```
+1	GETTABUP	1 0 -1	
+2	GETUPVAL	2 1	
+3	NEWTABLE	3 0 1	
+4	GETTABUP	4 0 -1
+5	GETUPVAL	5 2	
+6	CALL	    4 2 2	
+7	SETTABLE	3 -2 4
+8	TAILCALL	1 3 0	
+9	RETURN	    1 0	
+10	RETURN      0 1
+```
 ### Mangling
 In addition to lowering, `ts2hc` also undertakes an analysis pass of each output Lua module to discover its functions.
 
@@ -141,6 +154,7 @@ Common Flutter Runtime (CFR) is a blanket term given to the Lua 5.2 virtual mach
 
 `ts2hc` and CFR are at the very core of the developer experience and runtime system of Hydro-SDK. They work together to support goal 2 above by providing an analog to Flutter's killer development-time feature; hot-reload.
 
+### Pillars of Hot-Reload
 In Flutter, hot-reload is provided by Dart VM. Dart VM's hot-reload is based on a few [pillars](https://github.com/dart-lang/sdk/wiki/Hot-reload#immutable-methods):
 
 Pervasive Late-Binding
@@ -153,4 +167,117 @@ Immutable Methods
 State is Retained
 - Hot reload does not reset fields, neither the fields of instances nor those of classes or libraries
 
-CFR's hot-reload is inspired by (and largely abides by) the same pillars.
+CFR's hot-reload is inspired by (and largely abides by) the same pillars. CFR diverges from Dart VM however on the "Immutable Methods" pillar. In CFR, closures (and their scopes) are refreshed prior to every invocation. This means that old functions can never be invoked after a hot-reload no matter if they were captured by a closure. The only exception to this is if an old function is a stack frame.
+
+Consider the `build` method of the `MyHomePageState` class from the [Counter-App showcase](https://github.com/hydro-sdk/counter-app):
+
+```typescript
+import {
+    Text,
+    Center,
+    StatefulWidget,
+    State,
+    Column,
+    MainAxisAlignment,
+    Icon,
+} from "@hydro-sdk/hydro-sdk/runtime/flutter/widgets/index";
+import { AppBar, FloatingActionButton, Icons, Scaffold, Theme } from "@hydro-sdk/hydro-sdk/runtime/flutter/material/index";
+import { Widget } from "@hydro-sdk/hydro-sdk/runtime/flutter/widget";
+import { BuildContext } from "@hydro-sdk/hydro-sdk/runtime/flutter/buildContext";
+import { Key } from "@hydro-sdk/hydro-sdk/runtime/flutter/foundation/key";
+//...
+public build(context: BuildContext): Widget {
+        return new Scaffold({
+            appBar: new AppBar({
+                title: new Text(this.title),
+            }),
+            body: new Center({
+                child: new Column({
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                        new Text("You have pushed the button this many times"),
+                        new Text(this.counter.toString(), {
+                            key: new Key("counter"),
+                            style: Theme.of(context).textTheme.display1,
+                        }),
+                    ],
+                }),
+            }),
+            floatingActionButton: new FloatingActionButton({
+                key: new Key("increment"),
+                child: new Icon(Icons.add),
+                onPressed: this.incrementCounter,
+            }),
+        });
+    }
+```
+
+Making simple additions or deletions like changing the string "You have pushed the button this many times" to something else or adding more `Text` widgets results in successful hot-reloads and no change in app state.
+
+Consider a change to the original `build` method to the following:
+```typescript
+import {
+    Text,
+    Center,
+    StatefulWidget,
+    State,
+    Column,
+    MainAxisAlignment,
+    Icon,
+    Container,
+    MediaQuery
+} from "@hydro-sdk/hydro-sdk/runtime/flutter/widgets/index";
+import { Colors, FloatingActionButton, Icons, MaterialApp, Scaffold, Theme } from "@hydro-sdk/hydro-sdk/runtime/flutter/material/index";
+import { Widget } from "@hydro-sdk/hydro-sdk/runtime/flutter/widget";
+import { BuildContext } from "@hydro-sdk/hydro-sdk/runtime/flutter/buildContext";
+import { Key } from "@hydro-sdk/hydro-sdk/runtime/flutter/foundation/key";
+//...
+public build(context: BuildContext): Widget {
+        return new Scaffold({
+            appBar: new AppBar({
+                title: new Text(this.title),
+            }),
+            body: new Center({
+                child: new Column({
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                        //Add a thin blue box on top of the counter text
+                        new Container({
+                            color: Colors.blue.swatch[100],
+                            height: 25,
+                            width: MediaQuery.of(context).size.getWidth(),
+                        }),
+                        new Text("You have pushed the button this many times"),
+                        new Text(this.counter.toString(), {
+                            key: new Key("counter"),
+                            style: Theme.of(context).textTheme.display1,
+                        }),
+                    ],
+                }),
+            }),
+            floatingActionButton: new FloatingActionButton({
+                key: new Key("increment"),
+                child: new Icon(Icons.add),
+                onPressed: this.incrementCounter,
+            }),
+        });
+    }
+```
+
+The above change will result in an error like the following:
+```
+attempt to index a nil value null swatch
+Error raised in: 
+  MyHomePageState.prototype.build
+     defined in counter-app/ota/lib/counterApp.ts:63
+VM stacktrace follows:
+@.hydroc/0.0.1-nightly.231/ts2hc/40bd309e7516dae86ac3d02346f6d3a9b20fa010a9da4e6e3a65a33420bb9d32/index.ts:11563
+  (_Lae3eafcf842016833530caebe7755167b0866b5ac96416b45848c6fc6d65c58f::MyHomePageState.prototype.build::self_context::0)
+Dart stacktrace follows:
+#0      Context.tableIndex package:hydro_sdk/…/vm/context.dart:135
+#1      gettable           package:hydro_sdk/…/instructions/gettable.dart:12
+#2      Frame.cont         package:hydro_sdk/…/vm/frame.dart:228
+#3      Closure._dispatch  package:hydro_sdk/…/vm/closure.dart:96
+#4      Closure.dispatch   package:hydro_sdk/…/vm/closure.dart:69
+...
+```
