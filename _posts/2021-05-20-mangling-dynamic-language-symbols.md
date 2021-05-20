@@ -3,6 +3,9 @@ layout: post
 title: Mangling Dynamic Language Symbols, Uniquely Addressing the Atoms of Hot-Reload
 ---
 
+Decoupling the development time experience of Flutter from the Dart programming language.
+
+
 [Hydro-SDK](https://github.com/hydro-sdk/hydro-sdk) is a project with one large, ambitious goal. "Become React Native for Flutter".  
 It aims to do that by:
 1. Decoupling the API surface of Flutter from  the Dart programming language.
