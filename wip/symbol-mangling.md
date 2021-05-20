@@ -1,3 +1,7 @@
+---
+layout: post
+title: Mangling Dynamic Language Symbols, Uniquely Addressing the Atoms of Hot-Reload
+---
 
 [Hydro-SDK](https://github.com/hydro-sdk/hydro-sdk) is a project with one large, ambitious goal. "Become React Native for Flutter".  
 It aims to do that by:
@@ -41,7 +45,7 @@ export class CounterApp extends StatelessWidget {
 }
 ```
 
-`ts2hc` will lower `counter-app/ota/lib/counterApp.ts`, and all of its dependencies into individual Lua modules. These Lua modules are then bundled with the result looking something like the following:
+`ts2hc` will lower `counter-app/ota/lib/counterApp.ts`, and all of its dependencies into individual Lua modules. These Lua modules are then bundled, with the result looking something like the following:
 
 ```lua
 local package = {preload={}, loaded={}}
@@ -97,7 +101,7 @@ end)
 
 The lowered and bundled Lua still somewhat resembles the input Typescript. Typescript ES6 modules are wrapped into Lua immediately invoked function expressions (IIFE), assigned string keys in the `package.preload` map and their `exports` made available by `require`ing them. This pattern should be familiar to anyone who's hacked on Javascript bundlers/module resolvers like Browserify or Rollup.
 
-Lua lacks builtin object-oriented programming (OOP) facilities (wether prototypal or otherwise). Typescript language features which don't quite map one-to-one with Lua are shimmed using `__TS_*` functions made available through the `lualib_bundle` module (which `ts2hc` injects during bundling). Above, the `CounterApp` class is lowered into a series of calls to `__TS__Class` and `__TS__ClassExtends`, followed by placing its declared methods on its `prototype`.
+Lua lacks builtin object-oriented programming (OOP) facilities (whether prototypal or otherwise). Typescript language features which don't quite map one-to-one with Lua are shimmed using `__TS_*` functions made available through the `lualib_bundle` module (which `ts2hc` injects during bundling). Above, the `CounterApp` class is lowered into a series of calls to `__TS__Class` and `__TS__ClassExtends`, followed by placing its declared methods on its `prototype`.
 
 The Lua bundle output by `ts2hc` will eventually be turned into bytecode by the PUC-RIO Lua 5.2 compiler, distributed under the name `luac52` by Hydro-SDK. The `build` method on the `CounterApp` class above would compile into something like the following:
 ```
@@ -112,6 +116,7 @@ The Lua bundle output by `ts2hc` will eventually be turned into bytecode by the 
 9	RETURN	    1 0	
 10	RETURN      0 1
 ```
+Lua bytecode is outside the scope of this article, though is mentioned here for completeness.
 ### Mangling
 In addition to lowering, `ts2hc` also undertakes an analysis pass of each output Lua module to discover its functions.
 
@@ -143,7 +148,7 @@ public build(): Widget {
     }
 ```
 
-For anonymous closures, `ts2hc` simply names them "anonymous_closure". In order to uniquely identify anonymous closures (or any nested function declarations), a [dominator analysis](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) with respect to the declaration of every function is performed. The mangled name of the immediate dominator as well as the mangled names of every member of the dominance frontier of each function are prefixed to its mangled name. For the anonymous closure in the example above, it results in the following mangled name:
+For anonymous closures, `ts2hc` simply names them "anonymous_closure". In order to uniquely identify anonymous closures (or any nested function declarations), a [dominator analysis](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) with respect to the declaration order of every function is performed. The mangled name of the immediate dominator as well as the mangled names of every member of the dominance frontier of each function are prefixed to its mangled name. For the anonymous closure in the example above, it results in the following mangled name:
 ```
 _Lae3eafcf842016833530caebe7755167b0866b5ac96416b45848c6fc6d65c58f::CounterApp.prototype.build::self::0::anonymous_closure::0
 ```
@@ -167,7 +172,7 @@ Immutable Methods
 State is Retained
 - Hot reload does not reset fields, neither the fields of instances nor those of classes or libraries
 
-CFR's hot-reload is inspired by (and largely abides by) the same pillars. CFR diverges from Dart VM however on the "Immutable Methods" pillar. In CFR, closures (and their scopes) are refreshed prior to every invocation. This means that old functions can never be invoked after a hot-reload no matter if they were captured by a closure. The only exception to this is if an old function is a stack frame.
+CFR's hot-reload is inspired by (and largely abides by) the same pillars. CFR diverges from Dart VM however on the "Immutable Methods" pillar. In CFR, closures (and their scopes) are refreshed prior to every invocation. This means that old functions can never be invoked after a hot-reload no matter if they were captured by a closure. The only exception to this is if an old function is a stack frame. CFR uses the mangled name of debug symbols provided to it by `ts2hc` to uniquely address functions, allowing it to perform just-in-time method lookups and late-binding in a manner similar to Dart VM.
 
 Consider the `build` method of the `MyHomePageState` class from the [Counter-App showcase](https://github.com/hydro-sdk/counter-app):
 
@@ -281,3 +286,6 @@ Dart stacktrace follows:
 #4      Closure.dispatch   package:hydro_sdk/…/vm/closure.dart:69
 ...
 ```
+This error is the result of `Colors.blue.swatch` being uninitialized. Recall the example Lua module output above. Imported symbols are assigned to the value of calls to `require`. The `build` method now closes over symbols that are uninitialized (the newly imported symbols). This is unfortunately an artifact of how Typescript modules are represented when lowered. The result is that referencing newly imported symbols in a hot-reloaded function will usually trigger an exception.
+
+Hot-reload in Hydro-SDK is implemented purely in terms of Lua. Support for hot-reloading other programming languages (like Haxe and C#) in Hydro-SDK should not suffer from this same limitation (though will probably come with their own challenges and limitations). 
