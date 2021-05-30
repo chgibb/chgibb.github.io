@@ -150,7 +150,9 @@ public build(): Widget {
     }
 ```
 
-For anonymous closures, `ts2hc` simply names them "anonymous_closure". In order to uniquely identify anonymous closures (or any nested function declarations), a [dominator analysis](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) with respect to the declaration order of every function is performed. The mangled name of the immediate dominator as well as the mangled names of every member of the dominance frontier of each function are prefixed to its mangled name. For the anonymous closure in the example above, it results in the following mangled name:
+For anonymous closures, `ts2hc` simply names them "anonymous_closure". In order to uniquely identify anonymous closures (or any nested function declarations), a [dominator analysis](https://en.wikipedia.org/wiki/Dominator_(graph_theory)) with respect to the declaration order of every function is performed. The dominance frontier of the root function (in our case, `CounterApp.build`) forms a directed acyclic graph. A walk along the transitive reduction of the dominance frontier from the root function to a given child defines the ordering of the mangled names that child needs to include in order to be unique.
+
+ For the anonymous closure in `CounterApp.build` above, this yields the following:
 ```
 _Lae3eafcf842016833530caebe7755167b0866b5ac96416b45848c6fc6d65c58f::CounterApp.prototype.build::self::0::anonymous_closure::0
 ```
